@@ -1,0 +1,31 @@
+#include <vector>
+
+using namespace std;
+
+bool append_or_remove_elements(std::vector<int>& answer, int value, bool flag) {
+    if (flag) {
+        answer.insert(answer.end(), value * 2, value);
+    } else {
+        if (answer.size() < value) {
+            return false;
+        }
+        answer.resize(answer.size() - value);
+    }
+    return true;
+}
+
+vector<int> solution(vector<int> arr, vector<bool> flag) {
+    vector<int> answer;
+    
+    if (arr.size() != flag.size()) {
+        return {-1};
+    }
+    
+    for (int i = 0; i < arr.size(); i++) {
+        if (!append_or_remove_elements(answer, arr[i], flag[i])) {
+            return {-1};
+        }
+    }
+    
+    return answer;
+}

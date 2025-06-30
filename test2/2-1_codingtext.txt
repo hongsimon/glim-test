@@ -1,0 +1,19 @@
+#include <string>
+#include <vector>
+
+using namespace std;
+
+const int LAMB_PRICE = 12000;
+const int SODA_PRICE = 2000;
+
+int solution(int n, int k) {
+    int answer = 0;
+    int total_lamb_price = 0;
+    int total_soda_price = 0;
+    
+    total_lamb_price = LAMB_PRICE * n;
+    total_soda_price = SODA_PRICE * (k - (n / 10));
+    answer = total_lamb_price + total_soda_price;
+    
+    return answer;
+}

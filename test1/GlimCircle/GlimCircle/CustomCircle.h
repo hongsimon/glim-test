@@ -6,7 +6,6 @@ class CCustomCircle
 public:
     // Bresenham's circle algorithm ±¸Çö
     static void DrawPoint(CDC* pDC, int centerX, int centerY, int radius);
-    static void DrawCircle(CDC* pDC, int centerX, int centerY, int radius, int thickness);
     static void DrawCircle(CDC* pDC, std::vector<CPoint> points, int thickness);
     static std::vector<CPoint> GetCirclePoints(int centerX, int centerY, int radius);
 

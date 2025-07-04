@@ -7,6 +7,7 @@
 #include "GlimCircle.h"
 #include "CircleDrawDlg.h"
 #include "CustomCircle.h"
+#include "GeometryHelper.h"
 #include "afxdialogex.h"
 #include "iostream"
 
@@ -22,15 +23,15 @@ class CAboutDlg : public CDialogEx
 public:
 	CAboutDlg();
 
-// 대화 상자 데이터입니다.
+	// 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
 
-// 구현입니다.
+	// 구현입니다.
 protected:
 	DECLARE_MESSAGE_MAP()
 };
@@ -71,6 +72,9 @@ BEGIN_MESSAGE_MAP(CCircleDrawDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_WM_LBUTTONDOWN()
+	ON_WM_LBUTTONUP()
+	ON_WM_MOUSEMOVE()
+	ON_WM_TIMER()
 	ON_EN_CHANGE(IDC_EDIT_POINT_RADIUS, &CCircleDrawDlg::OnEnChangeEditPointRadius)
 	ON_EN_CHANGE(IDC_EDIT_CIRCLE_THICKNESS, &CCircleDrawDlg::OnEnChangeEditCircleThickness)
 END_MESSAGE_MAP()
@@ -158,6 +162,7 @@ void CCircleDrawDlg::OnSysCommand(UINT nID, LPARAM lParam)
 //  아래 코드가 필요합니다.  문서/뷰 모델을 사용하는 MFC 애플리케이션의 경우에는
 //  프레임워크에서 이 작업을 자동으로 수행합니다.
 
+// TODO 깜빡임 문제 해결 필요
 void CCircleDrawDlg::OnPaint()
 {
 	if (IsIconic())
@@ -182,8 +187,14 @@ void CCircleDrawDlg::OnPaint()
 		CDialogEx::OnPaint();
 	}
 
-	
+
 	CClientDC dc(&m_drawArea);
+	CRect rcStatic;
+	m_drawArea.GetClientRect(&rcStatic);
+	CRgn clipRgn;
+	clipRgn.CreateRectRgnIndirect(&rcStatic);
+	dc.SelectClipRgn(&clipRgn);
+
 	for (int i = 0; i < m_clickPoints.size(); i++)
 	{
 		DrawClickPoint(&dc, m_clickPoints[i], m_nPointRadius);
@@ -193,6 +204,16 @@ void CCircleDrawDlg::OnPaint()
 		strText.LoadString(IDS_TEXT_POINT);
 		strText.Format(strText, i + 1, m_clickPoints[i].x, m_clickPoints[i].y);
 		GetDlgItem(IDC_TEXT_POINT1 + i)->SetWindowText(strText);
+	}
+
+	if (m_clickPoints.size() == 3)
+	{
+		CPoint center;
+		int radius;
+
+		CGeometryHelper::CalculateCircumcircle(m_clickPoints[0], m_clickPoints[1], m_clickPoints[2], center, radius);
+
+		DrawCircle(&dc, center, radius, m_nCircleThickness);
 	}
 }
 
@@ -216,9 +237,9 @@ void CCircleDrawDlg::OnLButtonDown(UINT nFlags, CPoint point)
 		CPoint localPos = point;
 		localPos.Offset(-drawRect.left, -drawRect.top);
 
-		if (m_clickPoints.size() < 3) 
+		if (m_clickPoints.size() < 3)
 		{
-			for (CPoint p : m_clickPoints) 
+			for (CPoint p : m_clickPoints)
 			{
 				if ((p.x == localPos.x) && (p.y == localPos.y))
 				{
@@ -230,20 +251,58 @@ void CCircleDrawDlg::OnLButtonDown(UINT nFlags, CPoint point)
 			Invalidate();
 			UpdateWindow();
 		}
+		else if (m_clickPoints.size() == 3)
+		{
+			for (int i = 0; i < m_clickPoints.size(); i++)
+			{
+				if (IsPointInCircle(localPos, m_clickPoints[i], m_nPointRadius))
+				{
+					m_bDragging = true;
+					m_pSelectedPoint = &m_clickPoints[i];
+
+					SetCapture();
+
+					SetTimer(m_nTimerID, 8, nullptr);
+				}
+			}
+		}
 	}
 
 	CDialogEx::OnLButtonDown(nFlags, point);
 }
 
-void CCircleDrawDlg::DrawCircle(CDC* pDC, CPoint center, int radius, int thickness) 
+
+void CCircleDrawDlg::OnLButtonUp(UINT nFlags, CPoint point)
 {
-	std::vector<CPoint> circlePoints = CCustomCircle::GetCirclePoints(center.x, center.y, radius);
-	CCustomCircle::DrawCircle(pDC, circlePoints, thickness);
+	if (m_bDragging)
+	{
+		m_bDragging = false;
+		ReleaseCapture();
+
+		KillTimer(m_nTimerID);
+		m_bNeedRedraw = false;
+	}
+
+	CDialogEx::OnLButtonUp(nFlags, point);
 }
 
-void CCircleDrawDlg::DrawClickPoint(CDC* pDC, CPoint point, int radius)
+void CCircleDrawDlg::OnMouseMove(UINT nFlags, CPoint point)
 {
-	CCustomCircle::DrawPoint(pDC, point.x, point.y, radius);
+	if (m_bDragging)
+	{
+		CRect drawRect;
+		m_drawArea.GetWindowRect(&drawRect);
+		ScreenToClient(&drawRect);
+		CPoint localPos = point;
+		localPos.Offset(-drawRect.left, -drawRect.top);
+
+		m_pSelectedPoint->x = localPos.x;
+		m_pSelectedPoint->y = localPos.y;
+
+		m_bNeedRedraw = true;
+	}
+
+	CDialogEx::OnMouseMove(nFlags, point);
 }
 
 void CCircleDrawDlg::OnEnChangeEditPointRadius()
@@ -271,4 +330,33 @@ void CCircleDrawDlg::OnEnChangeEditCircleThickness()
 		}
 	}
 	Invalidate();
+}
+
+void CCircleDrawDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == m_nTimerID && m_bDragging && m_bNeedRedraw)
+	{
+		Invalidate();
+		m_bNeedRedraw = false;
+	}
+
+	CDialogEx::OnTimer(nIDEvent);
+}
+
+BOOL CCircleDrawDlg::IsPointInCircle(CPoint testPoint, CPoint center, int radius)
+{
+	int dx = testPoint.x - center.x;
+	int dy = testPoint.y - center.y;
+	return (dx * dx + dy * dy) <= radius * radius;
+}
+
+void CCircleDrawDlg::DrawCircle(CDC* pDC, CPoint center, int radius, int thickness)
+{
+	std::vector<CPoint> circlePoints = CCustomCircle::GetCirclePoints(center.x, center.y, radius);
+	CCustomCircle::DrawCircle(pDC, circlePoints, thickness);
+}
+
+void CCircleDrawDlg::DrawClickPoint(CDC* pDC, CPoint point, int radius)
+{
+	CCustomCircle::DrawPoint(pDC, point.x, point.y, radius);
 }

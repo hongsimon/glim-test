@@ -85,14 +85,6 @@ void CCustomCircle::DrawCircle(CDC* pDC, std::vector<CPoint> points, int thickne
 
 void CCustomCircle::PlotCirclePoints(CDC* pDC, int centerX, int centerY, int x, int y, int thickness)
 {
-    //pDC->SetPixel(centerX + x, centerY + y, RGB(0, 0, 0));
-    //pDC->SetPixel(centerX - x, centerY + y, RGB(0, 0, 0));
-    //pDC->SetPixel(centerX + x, centerY - y, RGB(0, 0, 0));
-    //pDC->SetPixel(centerX - x, centerY - y, RGB(0, 0, 0));
-    //pDC->SetPixel(centerX + y, centerY + x, RGB(0, 0, 0));
-    //pDC->SetPixel(centerX - y, centerY + x, RGB(0, 0, 0));
-    //pDC->SetPixel(centerX + y, centerY - x, RGB(0, 0, 0));
-    //pDC->SetPixel(centerX - y, centerY - x, RGB(0, 0, 0));
     DrawThickPixel(pDC, centerX + x, centerY + y, thickness);
     DrawThickPixel(pDC, centerX - x, centerY + y, thickness);
     DrawThickPixel(pDC, centerX + x, centerY - y, thickness);

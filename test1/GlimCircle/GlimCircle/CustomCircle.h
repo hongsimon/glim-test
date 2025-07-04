@@ -1,12 +1,17 @@
 #pragma once
+#include "vector"
+
 class CCustomCircle
 {
 public:
     // Bresenham's circle algorithm ±¸Çö
-    static void DrawCircle(CDC* pDC, int centerX, int centerY, int radius);
-    static void DrawThickCircle(CDC* pDC, int centerX, int centerY, int radius, int thickness);
+    static void DrawPoint(CDC* pDC, int centerX, int centerY, int radius);
+    static void DrawCircle(CDC* pDC, int centerX, int centerY, int radius, int thickness);
+    static void DrawCircle(CDC* pDC, std::vector<CPoint> points, int thickness);
+    static std::vector<CPoint> GetCirclePoints(int centerX, int centerY, int radius);
 
 private:
-    static void PlotCirclePoints(CDC* pDC, int centerX, int centerY, int x, int y);
-    static void DrawCircleOutline(CDC* pDC, int centerX, int centerY, int radius);
-};
+    static void PlotCirclePoints(CDC* pDC, int centerX, int centerY, int x, int y, int thickness);
+    static void PlotCircleLines(CDC* pDC, int centerX, int centerY, int x, int y);
+    static void DrawThickPixel(CDC* pDC, int x, int y, int thickness);
+}; 

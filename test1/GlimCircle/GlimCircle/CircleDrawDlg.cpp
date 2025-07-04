@@ -6,7 +6,9 @@
 #include "framework.h"
 #include "GlimCircle.h"
 #include "CircleDrawDlg.h"
+#include "CustomCircle.h"
 #include "afxdialogex.h"
+#include "iostream"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -59,12 +61,18 @@ CCircleDrawDlg::CCircleDrawDlg(CWnd* pParent /*=nullptr*/)
 void CCircleDrawDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+
+	DDX_Text(pDX, IDC_EDIT_POINT_RADIUS, m_nPointRadius);
+	DDX_Text(pDX, IDC_EDIT_CIRCLE_THICKNESS, m_nCircleThickness);
 }
 
 BEGIN_MESSAGE_MAP(CCircleDrawDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_WM_LBUTTONDOWN()
+	ON_EN_CHANGE(IDC_EDIT_POINT_RADIUS, &CCircleDrawDlg::OnEnChangeEditPointRadius)
+	ON_EN_CHANGE(IDC_EDIT_CIRCLE_THICKNESS, &CCircleDrawDlg::OnEnChangeEditCircleThickness)
 END_MESSAGE_MAP()
 
 
@@ -75,6 +83,17 @@ BOOL CCircleDrawDlg::OnInitDialog()
 	CDialogEx::OnInitDialog();
 
 	// 시스템 메뉴에 "정보..." 메뉴 항목을 추가합니다.
+	AllocConsole();    // stdout
+	FILE* fp;
+	freopen_s(&fp, "CONOUT$", "w", stdout);
+
+	// stderr
+	freopen_s(&fp, "CONOUT$", "w", stderr);
+
+	// stdin
+	freopen_s(&fp, "CONIN$", "r", stdin);
+
+	std::ios::sync_with_stdio(); // C++ iostream 동기화
 
 	// IDM_ABOUTBOX는 시스템 명령 범위에 있어야 합니다.
 	ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
@@ -100,15 +119,18 @@ BOOL CCircleDrawDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정합니다.
 
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
+	m_drawArea.SubclassDlgItem(IDC_DRAW_AREA, this);
+
 	CString strText;
+
 	strText.LoadString(IDS_APP_TITLE);
 	SetWindowText(strText);
 
-	strText.LoadString(IDS_POINT_RADIUS);
+	strText.LoadString(IDS_TEXT_POINT_RADIUS);
 	GetDlgItem(IDC_TEXT_POINT_RADIUS)->SetWindowText(strText);
 
-	strText.LoadString(IDS_LINE_WIDTH);
-	GetDlgItem(IDC_TEXT_LINE_WIDTH)->SetWindowText(strText);
+	strText.LoadString(IDS_TEXT_CIRCLE_THICKNESS);
+	GetDlgItem(IDC_TEXT_CIRCLE_THICKNESS)->SetWindowText(strText);
 
 	strText.LoadString(IDS_BUTTON_RESET);
 	GetDlgItem(IDC_BUTTON_RESET)->SetWindowText(strText);
@@ -159,6 +181,19 @@ void CCircleDrawDlg::OnPaint()
 	{
 		CDialogEx::OnPaint();
 	}
+
+	
+	CClientDC dc(&m_drawArea);
+	for (int i = 0; i < m_clickPoints.size(); i++)
+	{
+		DrawClickPoint(&dc, m_clickPoints[i], m_nPointRadius);
+
+		CString strText;
+
+		strText.LoadString(IDS_TEXT_POINT);
+		strText.Format(strText, i + 1, m_clickPoints[i].x, m_clickPoints[i].y);
+		GetDlgItem(IDC_TEXT_POINT1 + i)->SetWindowText(strText);
+	}
 }
 
 // 사용자가 최소화된 창을 끄는 동안에 커서가 표시되도록 시스템에서
@@ -166,4 +201,74 @@ void CCircleDrawDlg::OnPaint()
 HCURSOR CCircleDrawDlg::OnQueryDragIcon()
 {
 	return static_cast<HCURSOR>(m_hIcon);
+}
+
+void CCircleDrawDlg::OnLButtonDown(UINT nFlags, CPoint point)
+{
+	CRect drawRect;
+	m_drawArea.GetWindowRect(&drawRect);
+	ScreenToClient(&drawRect);
+
+	// Picture Control 내부를 클릭했는지 확인
+	if (drawRect.PtInRect(point))
+	{
+		// 클릭 좌표를 Picture Control 기준으로 변환
+		CPoint localPos = point;
+		localPos.Offset(-drawRect.left, -drawRect.top);
+
+		if (m_clickPoints.size() < 3) 
+		{
+			for (CPoint p : m_clickPoints) 
+			{
+				if ((p.x == localPos.x) && (p.y == localPos.y))
+				{
+					CDialogEx::OnLButtonDown(nFlags, point);
+					return;
+				}
+			}
+			m_clickPoints.push_back(localPos);
+			Invalidate();
+			UpdateWindow();
+		}
+	}
+
+	CDialogEx::OnLButtonDown(nFlags, point);
+}
+
+void CCircleDrawDlg::DrawCircle(CDC* pDC, CPoint center, int radius, int thickness) 
+{
+	std::vector<CPoint> circlePoints = CCustomCircle::GetCirclePoints(center.x, center.y, radius);
+	CCustomCircle::DrawCircle(pDC, circlePoints, thickness);
+}
+
+void CCircleDrawDlg::DrawClickPoint(CDC* pDC, CPoint point, int radius)
+{
+	CCustomCircle::DrawPoint(pDC, point.x, point.y, radius);
+}
+
+void CCircleDrawDlg::OnEnChangeEditPointRadius()
+{
+	if (UpdateData(TRUE))
+	{
+		if (m_nPointRadius == 0)
+		{
+			m_nPointRadius = 1;
+			UpdateData(FALSE);
+		}
+	}
+	Invalidate();
+}
+
+
+void CCircleDrawDlg::OnEnChangeEditCircleThickness()
+{
+	if (UpdateData(TRUE))
+	{
+		if (m_nCircleRadius == 0)
+		{
+			m_nCircleRadius = 1;
+			UpdateData(FALSE);
+		}
+	}
+	Invalidate();
 }

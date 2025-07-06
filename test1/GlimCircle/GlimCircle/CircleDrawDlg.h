@@ -1,6 +1,7 @@
 ﻿
 // CCircleDrawDlg.h: 헤더 파일
 #include "vector"
+#define WM_RANDOM_MOVE (WM_USER + 1)
 
 #pragma once
 
@@ -40,28 +41,29 @@ private:
     BOOL m_bCircleDrawn;                // 정원이 그려졌는지 여부
     BOOL m_bDragging;                   // 드래그 상태
     BOOL m_bNeedRedraw;                 // 드래그 중 새로 그릴지 여부
-    int m_nDragIndex;                   // 드래그 중인 점의 인덱스
 
     // 점 데이터
     std::vector<CPoint> m_clickPoints;  // 클릭한 3개 점
     int m_nPointRadius = 5;             // 클릭 지점 원의 반지름
     int m_nCircleThickness = 3;         // 정원 선 두께
-    CPoint* m_pSelectedPoint;
+    CPoint* m_pSelectedPoint;           // 드래그중인 점
 
     // 정원 데이터
     CPoint m_circleCenter;              // 정원의 중심
     int m_nCircleRadius;                // 정원의 반지름
 
     // 스레드
+    const int kDrawTimerInterval = 10;
+    const int kRandomTimerInterval = 500;
     CWinThread* m_pRandomThread;
+    BOOL m_bIsThreadRunning;
     BOOL m_bStopRandom;
-    UINT_PTR m_nTimerID = 1;
+    UINT_PTR m_nDrawTimerID = 1;
 
     // UI 컨트롤
     CEdit m_editPointRadius;
     CEdit m_editCircleThickness;
     CStatic m_drawArea;
-    CStatic m_staticCoords[3];
     CButton m_btnReset;
     CButton m_btnRandomMove;
 
@@ -75,13 +77,14 @@ public:
     afx_msg void OnBnClickedRandomMove();
     afx_msg void OnEnChangeEditPointRadius();
     afx_msg void OnEnChangeEditCircleThickness();
+    afx_msg LRESULT DoRandom(WPARAM wParam, LPARAM lParam);
 
     // 사용자 정의 함수
     void DrawCircle(CDC* pDC, CPoint center, int radius, int thickness = 1);
     void DrawClickPoint(CDC* pDC, CPoint point, int radius);
     BOOL IsPointInCircle(CPoint testPoint, CPoint center, int radius);
+    void InvalidateDrawArea(CWnd* pCtrl);
 
     // 스레드 관련
     static UINT RandomThreadProc(LPVOID pParam);
-    void DoRandom();
 };

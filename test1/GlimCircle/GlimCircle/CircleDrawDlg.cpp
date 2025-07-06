@@ -77,6 +77,9 @@ BEGIN_MESSAGE_MAP(CCircleDrawDlg, CDialogEx)
 	ON_WM_TIMER()
 	ON_EN_CHANGE(IDC_EDIT_POINT_RADIUS, &CCircleDrawDlg::OnEnChangeEditPointRadius)
 	ON_EN_CHANGE(IDC_EDIT_CIRCLE_THICKNESS, &CCircleDrawDlg::OnEnChangeEditCircleThickness)
+	ON_BN_CLICKED(IDC_BUTTON_RESET, &CCircleDrawDlg::OnBnClickedReset)
+	ON_BN_CLICKED(IDC_BUTTON_RANDOM, &CCircleDrawDlg::OnBnClickedRandomMove)
+	ON_MESSAGE(WM_RANDOM_MOVE, &CCircleDrawDlg::DoRandom)
 END_MESSAGE_MAP()
 
 
@@ -87,7 +90,7 @@ BOOL CCircleDrawDlg::OnInitDialog()
 	CDialogEx::OnInitDialog();
 
 	// 시스템 메뉴에 "정보..." 메뉴 항목을 추가합니다.
-	AllocConsole();    // stdout
+	// AllocConsole();    // stdout
 	FILE* fp;
 	freopen_s(&fp, "CONOUT$", "w", stdout);
 
@@ -162,7 +165,6 @@ void CCircleDrawDlg::OnSysCommand(UINT nID, LPARAM lParam)
 //  아래 코드가 필요합니다.  문서/뷰 모델을 사용하는 MFC 애플리케이션의 경우에는
 //  프레임워크에서 이 작업을 자동으로 수행합니다.
 
-// TODO 깜빡임 문제 해결 필요
 void CCircleDrawDlg::OnPaint()
 {
 	if (IsIconic())
@@ -187,20 +189,26 @@ void CCircleDrawDlg::OnPaint()
 		CDialogEx::OnPaint();
 	}
 
+	CRect rc;
+	m_drawArea.GetClientRect(&rc);
+	int width = rc.Width();
+	int height = rc.Height();
 
+	CDC memDC;
 	CClientDC dc(&m_drawArea);
-	CRect rcStatic;
-	m_drawArea.GetClientRect(&rcStatic);
-	CRgn clipRgn;
-	clipRgn.CreateRectRgnIndirect(&rcStatic);
-	dc.SelectClipRgn(&clipRgn);
+	memDC.CreateCompatibleDC(&dc);
 
-	for (int i = 0; i < m_clickPoints.size(); i++)
+	CBitmap bmp;
+	bmp.CreateCompatibleBitmap(&dc, width, height);
+	CBitmap* pOldBmp = memDC.SelectObject(&bmp);
+
+	memDC.FillSolidRect(rc, RGB(255, 255, 255));
+
+	for (int i = 0; i < m_clickPoints.size(); ++i)
 	{
-		DrawClickPoint(&dc, m_clickPoints[i], m_nPointRadius);
+		DrawClickPoint(&memDC, m_clickPoints[i], m_nPointRadius);
 
 		CString strText;
-
 		strText.LoadString(IDS_TEXT_POINT);
 		strText.Format(strText, i + 1, m_clickPoints[i].x, m_clickPoints[i].y);
 		GetDlgItem(IDC_TEXT_POINT1 + i)->SetWindowText(strText);
@@ -210,11 +218,14 @@ void CCircleDrawDlg::OnPaint()
 	{
 		CPoint center;
 		int radius;
-
 		CGeometryHelper::CalculateCircumcircle(m_clickPoints[0], m_clickPoints[1], m_clickPoints[2], center, radius);
 
-		DrawCircle(&dc, center, radius, m_nCircleThickness);
+		DrawCircle(&memDC, center, radius, m_nCircleThickness);
 	}
+
+	dc.BitBlt(0, 0, width, height, &memDC, 0, 0, SRCCOPY);
+
+	memDC.SelectObject(pOldBmp);
 }
 
 // 사용자가 최소화된 창을 끄는 동안에 커서가 표시되도록 시스템에서
@@ -248,7 +259,7 @@ void CCircleDrawDlg::OnLButtonDown(UINT nFlags, CPoint point)
 				}
 			}
 			m_clickPoints.push_back(localPos);
-			Invalidate();
+			InvalidateDrawArea(&m_drawArea);
 			UpdateWindow();
 		}
 		else if (m_clickPoints.size() == 3)
@@ -262,7 +273,7 @@ void CCircleDrawDlg::OnLButtonDown(UINT nFlags, CPoint point)
 
 					SetCapture();
 
-					SetTimer(m_nTimerID, 8, nullptr);
+					SetTimer(m_nDrawTimerID, kDrawTimerInterval, nullptr);
 				}
 			}
 		}
@@ -279,7 +290,7 @@ void CCircleDrawDlg::OnLButtonUp(UINT nFlags, CPoint point)
 		m_bDragging = false;
 		ReleaseCapture();
 
-		KillTimer(m_nTimerID);
+		KillTimer(m_nDrawTimerID);
 		m_bNeedRedraw = false;
 	}
 
@@ -315,7 +326,7 @@ void CCircleDrawDlg::OnEnChangeEditPointRadius()
 			UpdateData(FALSE);
 		}
 	}
-	Invalidate();
+	InvalidateDrawArea(&m_drawArea);
 }
 
 
@@ -329,14 +340,48 @@ void CCircleDrawDlg::OnEnChangeEditCircleThickness()
 			UpdateData(FALSE);
 		}
 	}
-	Invalidate();
+	InvalidateDrawArea(&m_drawArea);
+}
+
+
+void CCircleDrawDlg::OnBnClickedReset()
+{
+	m_bStopRandom = true;
+
+	m_clickPoints.clear();
+
+	for (int i = 0; i < 3; i++) 
+	{
+		CString strText;
+
+		strText.LoadString(IDS_TEXT_POINT);
+		strText.Format(strText, i + 1, -1, -1);
+		GetDlgItem(IDC_TEXT_POINT1 + i)->SetWindowText(strText);
+	}
+
+	InvalidateDrawArea(&m_drawArea);
+}
+
+
+void CCircleDrawDlg::OnBnClickedRandomMove()
+{
+	if (m_bIsThreadRunning) {
+		return;
+	}
+
+	if (m_clickPoints.size() < 3) {
+		return;
+	}
+
+	m_bStopRandom = false;
+	AfxBeginThread(RandomThreadProc, this);
 }
 
 void CCircleDrawDlg::OnTimer(UINT_PTR nIDEvent)
 {
-	if (nIDEvent == m_nTimerID && m_bDragging && m_bNeedRedraw)
+	if (nIDEvent == m_nDrawTimerID && m_bDragging && m_bNeedRedraw)
 	{
-		Invalidate();
+		InvalidateDrawArea(&m_drawArea);
 		m_bNeedRedraw = false;
 	}
 
@@ -350,13 +395,69 @@ BOOL CCircleDrawDlg::IsPointInCircle(CPoint testPoint, CPoint center, int radius
 	return (dx * dx + dy * dy) <= radius * radius;
 }
 
+UINT CCircleDrawDlg::RandomThreadProc(LPVOID pParam)
+{
+	CCircleDrawDlg* pDlg = reinterpret_cast<CCircleDrawDlg*>(pParam);
+	if (!pDlg) return 0;
+
+	pDlg->m_bIsThreadRunning = true;
+
+	for (int i = 0; i < 10; ++i)
+	{
+		::PostMessage(pDlg->GetSafeHwnd(), WM_RANDOM_MOVE, 0, 0);
+
+		Sleep(500);
+
+		if (pDlg->m_bStopRandom)
+			break;
+	}
+
+	pDlg->m_bIsThreadRunning = false;
+
+	return 0;
+}
+
+LRESULT CCircleDrawDlg::DoRandom(WPARAM wParam, LPARAM lParam)
+{
+	if (m_clickPoints.size() < 3) {
+		return 0;
+	}
+
+	CRect rect;
+	m_drawArea.GetWindowRect(&rect);
+
+	for (int i = 0; i < m_clickPoints.size(); i++) 
+	{
+		int randX = rand() % (rect.Width());
+		int randY = rand() % (rect.Height());
+
+		m_clickPoints[i] = CPoint(randX, randY);
+	}
+
+	InvalidateDrawArea(&m_drawArea);
+
+	return 0;
+}
+
 void CCircleDrawDlg::DrawCircle(CDC* pDC, CPoint center, int radius, int thickness)
 {
-	std::vector<CPoint> circlePoints = CCustomCircle::GetCirclePoints(center.x, center.y, radius);
-	CCustomCircle::DrawCircle(pDC, circlePoints, thickness);
+	std::vector<CPoint> circlePoints = CCustomCircle::GetThickCirclePoints(&m_drawArea, center.x, center.y, radius, thickness);
+	CCustomCircle::DrawCircle(pDC, circlePoints);
 }
 
 void CCircleDrawDlg::DrawClickPoint(CDC* pDC, CPoint point, int radius)
 {
 	CCustomCircle::DrawPoint(pDC, point.x, point.y, radius);
+}
+
+void CCircleDrawDlg::InvalidateDrawArea(CWnd* pCtrl)
+{
+	if (!pCtrl) {
+		return;
+	}
+
+	CRect rc;
+	pCtrl->GetWindowRect(&rc);
+	ScreenToClient(&rc);
+	InvalidateRect(&rc, FALSE);
 }

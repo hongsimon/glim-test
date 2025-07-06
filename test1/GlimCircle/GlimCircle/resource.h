@@ -31,6 +31,7 @@
 #define IDC_TEXT_POINT2                 1009
 #define IDC_TEXT_POINT3                 1010
 #define IDC_DRAW_AREA                   1011
+#define IDC_DRAW_AREA2                  1012
 
 // Next default values for new objects
 // 
